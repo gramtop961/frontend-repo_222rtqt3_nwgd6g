@@ -52,9 +52,9 @@ export default function Hero() {
 
   return (
     <section className="relative h-[90vh] w-full overflow-hidden bg-gradient-to-b from-[#0b0f1a] via-[#0a0d18] to-[#0b0f1a]">
-      {/* Spline 3D scene as full background */}
+      {/* Spline 3D scene as full background (hero) */}
       <div className="absolute inset-0">
-        <Spline scene="https://prod.spline.design/7m4PRZ7kg6K1jPfF/scene.splinecode" style={{ width: '100%', height: '100%' }} />
+        <Spline scene="https://prod.spline.design/EF7JOSsHLk16Tlw9/scene.splinecode" style={{ width: '100%', height: '100%' }} />
       </div>
 
       {/* Soft gradient and grid overlays for readability */}
@@ -71,14 +71,14 @@ export default function Hero() {
         >
           <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-xs backdrop-blur">
             <Rocket size={14} className="text-indigo-300" />
-            <span className="text-indigo-200">Built Free for Testing</span>
+            <span className="text-indigo-200">AvatarMeet • Futuristic 3D calling</span>
           </div>
 
           <h1 className="text-3xl font-semibold leading-tight sm:text-5xl md:text-6xl">
-            Bring your avatar to life in a 3D classroom.
+            Step into a cyber-virtual classroom.
           </h1>
           <p className="mx-auto max-w-2xl text-sm text-indigo-200 sm:text-base">
-            Join rooms, talk, and express yourself — as your avatar.
+            Your webcam powers your avatar. Talk naturally with spatial audio, in a mesmerizing 3D space.
           </p>
 
           <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
@@ -100,7 +100,7 @@ export default function Hero() {
           transition={{ delay: 0.6 }}
           className="mt-10 text-xs text-indigo-200/80"
         >
-          AR/VR ready • WebRTC voice + text • Multi-user rooms
+          WebRTC voice • Webcam-driven avatars • WebXR-ready
         </motion.div>
       </div>
 
