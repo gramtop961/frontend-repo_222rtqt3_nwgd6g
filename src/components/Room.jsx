@@ -10,6 +10,7 @@ export default function Room({ code }) {
   const [muted, setMuted] = useState(false);
   const [cameraOn, setCameraOn] = useState(true);
   const [level, setLevel] = useState(0);
+  const [xrSupport, setXrSupport] = useState(null);
   const backend = import.meta.env.VITE_BACKEND_URL;
 
   const videoRef = useRef(null);
@@ -122,6 +123,25 @@ export default function Room({ code }) {
     setCameraOn(next);
   };
 
+  const checkWebXR = async () => {
+    try {
+      if (!('xr' in navigator)) {
+        setXrSupport({ supported: false, details: 'WebXR not found in this browser.' });
+        return;
+      }
+      const isSecure = window.isSecureContext;
+      if (!isSecure) {
+        setXrSupport({ supported: false, details: 'WebXR requires HTTPS (secure context).' });
+        return;
+      }
+      const supported = await navigator.xr.isSessionSupported('immersive-vr');
+      setXrSupport({ supported, details: supported ? 'Immersive VR is supported.' : 'Immersive VR is not supported on this device.' });
+    } catch (e) {
+      console.error(e);
+      setXrSupport({ supported: false, details: 'Could not determine WebXR support.' });
+    }
+  };
+
   return (
     <section className="relative min-h-[100vh] w-full overflow-hidden bg-[#070a13]">
       <div className="absolute inset-0">
@@ -223,6 +243,14 @@ export default function Room({ code }) {
                   <li>Avatar lip-sync (Ready Player Me)</li>
                   <li>WebXR AR/VR mode toggle</li>
                 </ul>
+                <div className="mt-4">
+                  <button onClick={checkWebXR} className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-indigo-200 transition hover:border-indigo-400/60 hover:text-white">Check WebXR Support</button>
+                  {xrSupport && (
+                    <div className={`mt-2 rounded-md px-3 py-2 text-xs ${xrSupport.supported ? 'border border-emerald-400/30 bg-emerald-500/10 text-emerald-200' : 'border border-yellow-400/30 bg-yellow-500/10 text-yellow-200'}`}>
+                      {xrSupport.details}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>

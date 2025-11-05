@@ -54,7 +54,7 @@ export default function Hero() {
     <section className="relative h-[90vh] w-full overflow-hidden bg-gradient-to-b from-[#0b0f1a] via-[#0a0d18] to-[#0b0f1a]">
       {/* Spline 3D scene as full background (hero) */}
       <div className="absolute inset-0">
-        <Spline scene="https://prod.spline.design/EF7JOSsHLk16Tlw9/scene.splinecode" style={{ width: '100%', height: '100%' }} />
+        <Spline scene="https://prod.spline.design/9HgHYACX2il7xmYO/scene.splinecode" style={{ width: '100%', height: '100%' }} />
       </div>
 
       {/* Soft gradient and grid overlays for readability */}
@@ -75,10 +75,10 @@ export default function Hero() {
           </div>
 
           <h1 className="text-3xl font-semibold leading-tight sm:text-5xl md:text-6xl">
-            Step into a cyber-virtual classroom.
+            Put on the future — step into VR.
           </h1>
           <p className="mx-auto max-w-2xl text-sm text-indigo-200 sm:text-base">
-            Your webcam powers your avatar. Talk naturally with spatial audio, in a mesmerizing 3D space.
+            A minimal, futuristic space featuring an interactive VR headset. Create or join rooms, then talk naturally with spatial audio and lifelike avatars.
           </p>
 
           <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
@@ -100,7 +100,7 @@ export default function Hero() {
           transition={{ delay: 0.6 }}
           className="mt-10 text-xs text-indigo-200/80"
         >
-          WebRTC voice • Webcam-driven avatars • WebXR-ready
+          WebRTC signaling • Ready Player Me lip‑sync • WebXR AR/VR mode
         </motion.div>
       </div>
 
