@@ -5,6 +5,8 @@ import Spline from '@splinetool/react-spline';
 export default function Room({ code }) {
   const [room, setRoom] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState('');
+  const [mediaError, setMediaError] = useState('');
   const [muted, setMuted] = useState(false);
   const [cameraOn, setCameraOn] = useState(true);
   const [level, setLevel] = useState(0);
@@ -20,12 +22,14 @@ export default function Room({ code }) {
     let active = true;
     async function fetchRoom() {
       try {
+        setFetchError('');
         const res = await fetch(`${backend}/rooms/${code}`);
         if (!res.ok) throw new Error('Room not found');
         const data = await res.json();
         if (active) setRoom(data);
       } catch (e) {
         console.error(e);
+        if (active) setFetchError('Room not found. It may have expired or the code is invalid.');
       } finally {
         if (active) setLoading(false);
       }
@@ -42,6 +46,7 @@ export default function Room({ code }) {
 
     async function initMedia() {
       try {
+        setMediaError('');
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         if (stopped) return;
         streamRef.current = stream;
@@ -59,7 +64,6 @@ export default function Room({ code }) {
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         const tick = () => {
           analyser.getByteFrequencyData(dataArray);
-          // Rough volume estimation using average of lower bins
           const slice = dataArray.slice(0, 16);
           const avg = slice.reduce((a, b) => a + b, 0) / slice.length;
           setLevel(Math.min(1, avg / 160));
@@ -68,6 +72,13 @@ export default function Room({ code }) {
         tick();
       } catch (err) {
         console.error('Media init failed', err);
+        let msg = 'Could not access camera/microphone.';
+        if (err && err.name === 'NotReadableError') {
+          msg = 'Your camera or microphone is already in use by another application.';
+        } else if (err && err.name === 'NotAllowedError') {
+          msg = 'Permission denied. Please allow camera and microphone access.';
+        }
+        setMediaError(msg);
       }
     }
 
@@ -85,10 +96,8 @@ export default function Room({ code }) {
   }, []);
 
   const sceneUrl = useMemo(() => {
-    if (!room) return null;
-    // Use a consistent Spline background for immersive feel
     return 'https://prod.spline.design/EF7JOSsHLk16Tlw9/scene.splinecode';
-  }, [room]);
+  }, []);
 
   const leave = () => {
     window.history.pushState({}, '', '/');
@@ -126,78 +135,98 @@ export default function Room({ code }) {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold">Room {code}</h1>
-            <p className="text-sm text-indigo-200/80">Scene: {room?.scene ?? 'loading...'}</p>
+            <p className="text-sm text-indigo-200/80">{loading ? 'Loading room...' : fetchError ? 'Not found' : `Scene: ${room?.scene ?? 'default'}`}</p>
           </div>
           <button onClick={leave} className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm text-indigo-200 transition hover:border-indigo-400/60 hover:text-white">
             <DoorOpen size={16} /> Leave
           </button>
         </div>
 
-        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur lg:col-span-2">
-            <div className="grid h-[50vh] grid-rows-[1fr_auto] gap-3 rounded-xl border border-white/5 bg-black/20 p-3">
-              <div className="relative flex items-center justify-center overflow-hidden rounded-lg bg-black/40">
-                {/* Local webcam preview */}
-                <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
-                {/* Audio level meter */}
-                <div className="pointer-events-none absolute bottom-3 left-1/2 w-40 -translate-x-1/2">
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-violet-500 transition-[width]"
-                      style={{ width: `${Math.max(6, level * 100)}%` }}
-                    />
+        {loading ? (
+          <div className="mt-10 flex items-center justify-center gap-2 text-indigo-200">
+            <Loader2 className="animate-spin" size={18} /> Loading...
+          </div>
+        ) : fetchError ? (
+          <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-6 text-indigo-100">
+            <div className="text-base font-medium">{fetchError}</div>
+            <p className="mt-1 text-sm text-indigo-200/80">Create a new room from the homepage, or double-check the code.</p>
+            <div className="mt-4">
+              <button onClick={leave} className="rounded-lg bg-gradient-to-r from-indigo-500 to-violet-500 px-4 py-2 text-sm text-white">Go Home</button>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur lg:col-span-2">
+              <div className="grid h-[50vh] grid-rows-[1fr_auto] gap-3 rounded-xl border border-white/5 bg-black/20 p-3">
+                <div className="relative flex items-center justify-center overflow-hidden rounded-lg bg-black/40">
+                  {/* Local webcam preview */}
+                  <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
+                  {/* Audio level meter */}
+                  <div className="pointer-events-none absolute bottom-3 left-1/2 w-40 -translate-x-1/2">
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-violet-500 transition-[width]"
+                        style={{ width: `${Math.max(6, level * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {mediaError && (
+                  <div className="rounded-lg border border-yellow-400/30 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-200">
+                    {mediaError}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-center gap-3">
+                  <button
+                    onClick={toggleMute}
+                    className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition ${
+                      muted
+                        ? 'bg-white/5 text-indigo-200 border border-white/10'
+                        : 'bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-[0_0_18px_rgba(139,92,246,0.35)]'
+                    }`}
+                  >
+                    {muted ? <MicOff size={16} /> : <Mic size={16} />} {muted ? 'Unmute' : 'Mute'}
+                  </button>
+                  <button
+                    onClick={toggleCamera}
+                    className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition ${
+                      !cameraOn
+                        ? 'bg-white/5 text-indigo-200 border border-white/10'
+                        : 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-[0_0_18px_rgba(59,130,246,0.35)]'
+                    }`}
+                  >
+                    {cameraOn ? <VideoIcon size={16} /> : <VideoOff size={16} />} {cameraOn ? 'Camera On' : 'Camera Off'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-indigo-100"><Users size={16} /> Participants</div>
+                  <span className="text-xs text-indigo-200/80">Local</span>
+                </div>
+                <div className="mt-3 space-y-2 text-sm text-indigo-200/90">
+                  <div className="flex items-center justify-between">
+                    <span>You</span>
+                    <span className="opacity-70">Connected</span>
                   </div>
                 </div>
               </div>
-
-              <div className="flex items-center justify-center gap-3">
-                <button
-                  onClick={toggleMute}
-                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition ${
-                    muted
-                      ? 'bg-white/5 text-indigo-200 border border-white/10'
-                      : 'bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-[0_0_18px_rgba(139,92,246,0.35)]'
-                  }`}
-                >
-                  {muted ? <MicOff size={16} /> : <Mic size={16} />} {muted ? 'Unmute' : 'Mute'}
-                </button>
-                <button
-                  onClick={toggleCamera}
-                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition ${
-                    !cameraOn
-                      ? 'bg-white/5 text-indigo-200 border border-white/10'
-                      : 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-[0_0_18px_rgba(59,130,246,0.35)]'
-                  }`}
-                >
-                  {cameraOn ? <VideoIcon size={16} /> : <VideoOff size={16} />} {cameraOn ? 'Camera On' : 'Camera Off'}
-                </button>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+                <div className="text-indigo-100">Coming soon</div>
+                <ul className="mt-2 list-disc pl-5 text-sm text-indigo-200/90">
+                  <li>Peer-to-peer WebRTC with signaling</li>
+                  <li>Avatar lip-sync (Ready Player Me)</li>
+                  <li>WebXR AR/VR mode toggle</li>
+                </ul>
               </div>
             </div>
           </div>
-
-          <div className="flex flex-col gap-4">
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-indigo-100"><Users size={16} /> Participants</div>
-                <span className="text-xs text-indigo-200/80">Local</span>
-              </div>
-              <div className="mt-3 space-y-2 text-sm text-indigo-200/90">
-                <div className="flex items-center justify-between">
-                  <span>You</span>
-                  <span className="opacity-70">Connected</span>
-                </div>
-              </div>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-              <div className="text-indigo-100">Coming soon</div>
-              <ul className="mt-2 list-disc pl-5 text-sm text-indigo-200/90">
-                <li>Peer-to-peer WebRTC with signaling</li>
-                <li>Avatar lip-sync (Ready Player Me)</li>
-                <li>WebXR AR/VR mode toggle</li>
-              </ul>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
     </section>
   );
