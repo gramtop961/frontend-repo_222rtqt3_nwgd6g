@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Mic, MicOff, Users, DoorOpen, Loader2, Video as VideoIcon, VideoOff, User } from 'lucide-react';
+import { Mic, MicOff, Users, DoorOpen, Loader2, Video as VideoIcon, VideoOff, User, Shuffle } from 'lucide-react';
 import Spline from '@splinetool/react-spline';
 
 export default function Room({ code }) {
@@ -11,7 +11,6 @@ export default function Room({ code }) {
   const [cameraOn, setCameraOn] = useState(true);
   const [level, setLevel] = useState(0);
   const [xrSupport, setXrSupport] = useState(null);
-  const [showCreator, setShowCreator] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState('');
   const backend = import.meta.env.VITE_BACKEND_URL;
 
@@ -22,8 +21,27 @@ export default function Room({ code }) {
   const rafRef = useRef(null);
 
   const viewerRef = useRef(null);
-  const creatorRef = useRef(null);
   const frameReadyRef = useRef(false);
+
+  // Small pool of Ready Player Me demo avatars. We pick one at random on join.
+  // Note: These are public example models; the app will automatically select one.
+  const RANDOM_MODELS = useMemo(
+    () => [
+      'https://models.readyplayer.me/64b64d9cbf9a26f187a9b0b5.glb',
+      'https://models.readyplayer.me/64b64db9bf9a26f187a9b0b8.glb',
+      'https://models.readyplayer.me/64b64df8bf9a26f187a9b0bb.glb',
+      'https://models.readyplayer.me/64b64e2bbf9a26f187a9b0be.glb',
+      'https://models.readyplayer.me/64b64e53bf9a26f187a9b0c1.glb',
+      'https://models.readyplayer.me/64b64e7fbf9a26f187a9b0c4.glb'
+    ],
+    []
+  );
+
+  useEffect(() => {
+    // Pick a random avatar immediately (no user choice)
+    const pick = RANDOM_MODELS[Math.floor(Math.random() * RANDOM_MODELS.length)];
+    setAvatarUrl(pick);
+  }, [RANDOM_MODELS]);
 
   useEffect(() => {
     let active = true;
@@ -75,7 +93,7 @@ export default function Room({ code }) {
           const avg = slice.reduce((a, b) => a + b, 0) / slice.length;
           const lvl = Math.min(1, avg / 160);
           setLevel(lvl);
-          // Try drive avatar lip-sync if viewer is ready
+          // Drive avatar lip-sync if viewer is ready
           sendBlendShapes(lvl);
           rafRef.current = requestAnimationFrame(tick);
         };
@@ -104,30 +122,11 @@ export default function Room({ code }) {
     };
   }, []);
 
-  // Ready Player Me postMessage handling
+  // Ready Player Me postMessage handling (viewer)
   useEffect(() => {
     function handleMessage(event) {
       const data = event.data;
       if (!data) return;
-      // Creator frame events
-      if (data.source === 'readyplayerme') {
-        if (data.eventName === 'v1.frame.ready') {
-          // Subscribe to avatar export event
-          creatorRef.current?.contentWindow?.postMessage({
-            target: 'readyplayerme',
-            type: 'subscribe',
-            eventName: 'v1.avatar.exported'
-          }, '*');
-        }
-        if (data.eventName === 'v1.avatar.exported') {
-          const url = data.data?.url;
-          if (url) {
-            setAvatarUrl(url);
-            setShowCreator(false);
-          }
-        }
-      }
-
       // Viewer frame readiness
       if (data.target === 'readyplayerme' && data.type === 'frameReady') {
         frameReadyRef.current = true;
@@ -144,14 +143,17 @@ export default function Room({ code }) {
       const cw = viewerRef.current.contentWindow;
       if (!cw) return;
       if (!frameReadyRef.current) return;
-      cw.postMessage({
-        target: 'readyplayerme',
-        type: 'setBlendShapes',
-        blendShapes: [
-          { name: 'JawOpen', value: Math.max(0, Math.min(1, lvl * 1.4)) },
-          { name: 'MouthClose', value: 1 - Math.max(0, Math.min(1, lvl * 1.4)) }
-        ]
-      }, '*');
+      cw.postMessage(
+        {
+          target: 'readyplayerme',
+          type: 'setBlendShapes',
+          blendShapes: [
+            { name: 'JawOpen', value: Math.max(0, Math.min(1, lvl * 1.4)) },
+            { name: 'MouthClose', value: 1 - Math.max(0, Math.min(1, lvl * 1.4)) }
+          ]
+        },
+        '*'
+      );
     } catch (e) {
       // no-op
     }
@@ -203,9 +205,11 @@ export default function Room({ code }) {
     }
   };
 
-  const openCreator = () => {
-    setShowCreator(true);
-    // creator iframe will emit frame.ready then we subscribe
+  const rerollAvatar = () => {
+    const pick = RANDOM_MODELS[Math.floor(Math.random() * RANDOM_MODELS.length)];
+    setAvatarUrl(pick);
+    // Reset frame readiness for new model
+    frameReadyRef.current = false;
   };
 
   const viewerSrc = avatarUrl
@@ -310,16 +314,12 @@ export default function Room({ code }) {
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-indigo-100"><User size={16} /> Avatar</div>
-                  {!avatarUrl ? (
-                    <button onClick={openCreator} className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-indigo-200 transition hover:border-indigo-400/60 hover:text-white">Choose Avatar</button>
-                  ) : (
-                    <button onClick={() => setShowCreator(true)} className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-indigo-200 transition hover:border-indigo-400/60 hover:text-white">Change</button>
-                  )}
+                  <button onClick={rerollAvatar} className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-indigo-200 transition hover:border-indigo-400/60 hover:text-white">
+                    <Shuffle size={14} /> Shuffle
+                  </button>
                 </div>
-
-                {!avatarUrl ? (
-                  <p className="mt-3 text-xs text-indigo-200/80">Pick a Ready Player Me avatar. Your mic will drive basic lip-sync.</p>
-                ) : (
+                <p className="mt-2 text-xs text-indigo-200/80">An avatar is picked randomly when you join. Use Shuffle to re‑roll.</p>
+                {avatarUrl && (
                   <div className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-black/30">
                     <div className="aspect-video w-full">
                       <iframe
@@ -354,26 +354,6 @@ export default function Room({ code }) {
           </div>
         )}
       </div>
-
-      {showCreator && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 p-4">
-          <div className="relative w-full max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-[#0b0f1a] shadow-2xl">
-            <div className="flex items-center justify-between px-4 py-3 text-white">
-              <div className="text-sm font-medium">Ready Player Me — Create your avatar</div>
-              <button onClick={() => setShowCreator(false)} className="text-xs text-indigo-200 hover:text-white">Close</button>
-            </div>
-            <div className="h-[70vh] w-full">
-              <iframe
-                ref={creatorRef}
-                title="Ready Player Me Creator"
-                src="https://readyplayer.me/avatar?frameApi"
-                allow="camera; microphone; autoplay; clipboard-read; clipboard-write;"
-                className="h-full w-full"
-              />
-            </div>
-          </div>
-        </div>
-      )}
     </section>
   );
 }
