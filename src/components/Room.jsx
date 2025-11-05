@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Mic, MicOff, Users, DoorOpen, Loader2, Video as VideoIcon, VideoOff, User, Shuffle } from 'lucide-react';
 import Spline from '@splinetool/react-spline';
+import AvatarViewer from './AvatarViewer';
 
 export default function Room({ code }) {
   const [room, setRoom] = useState(null);
@@ -20,11 +21,7 @@ export default function Room({ code }) {
   const analyserRef = useRef(null);
   const rafRef = useRef(null);
 
-  const viewerRef = useRef(null);
-  const frameReadyRef = useRef(false);
-
-  // Small pool of Ready Player Me demo avatars. We pick one at random on join.
-  // Note: These are public example models; the app will automatically select one.
+  // Small pool of downloaded RPM models (GLB). Pick one at random on join.
   const RANDOM_MODELS = useMemo(
     () => [
       'https://models.readyplayer.me/64b64d9cbf9a26f187a9b0b5.glb',
@@ -93,8 +90,6 @@ export default function Room({ code }) {
           const avg = slice.reduce((a, b) => a + b, 0) / slice.length;
           const lvl = Math.min(1, avg / 160);
           setLevel(lvl);
-          // Drive avatar lip-sync if viewer is ready
-          sendBlendShapes(lvl);
           rafRef.current = requestAnimationFrame(tick);
         };
         tick();
@@ -121,43 +116,6 @@ export default function Room({ code }) {
       }
     };
   }, []);
-
-  // Ready Player Me postMessage handling (viewer)
-  useEffect(() => {
-    function handleMessage(event) {
-      const data = event.data;
-      if (!data) return;
-      // Viewer frame readiness
-      if (data.target === 'readyplayerme' && data.type === 'frameReady') {
-        frameReadyRef.current = true;
-      }
-    }
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, []);
-
-  const sendBlendShapes = (lvl) => {
-    // Map audio level to jaw open
-    if (!viewerRef.current) return;
-    try {
-      const cw = viewerRef.current.contentWindow;
-      if (!cw) return;
-      if (!frameReadyRef.current) return;
-      cw.postMessage(
-        {
-          target: 'readyplayerme',
-          type: 'setBlendShapes',
-          blendShapes: [
-            { name: 'JawOpen', value: Math.max(0, Math.min(1, lvl * 1.4)) },
-            { name: 'MouthClose', value: 1 - Math.max(0, Math.min(1, lvl * 1.4)) }
-          ]
-        },
-        '*'
-      );
-    } catch (e) {
-      // no-op
-    }
-  };
 
   const sceneUrl = useMemo(() => {
     return 'https://prod.spline.design/EF7JOSsHLk16Tlw9/scene.splinecode';
@@ -208,13 +166,7 @@ export default function Room({ code }) {
   const rerollAvatar = () => {
     const pick = RANDOM_MODELS[Math.floor(Math.random() * RANDOM_MODELS.length)];
     setAvatarUrl(pick);
-    // Reset frame readiness for new model
-    frameReadyRef.current = false;
   };
-
-  const viewerSrc = avatarUrl
-    ? `https://readyplayer.me/avatar?model=${encodeURIComponent(avatarUrl)}&pose=idle&hideControls=true&frameApi=1`
-    : '';
 
   return (
     <section className="relative min-h-[100vh] w-full overflow-hidden bg-[#070a13]">
@@ -322,13 +274,7 @@ export default function Room({ code }) {
                 {avatarUrl && (
                   <div className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-black/30">
                     <div className="aspect-video w-full">
-                      <iframe
-                        ref={viewerRef}
-                        title="Avatar Viewer"
-                        src={viewerSrc}
-                        allow="camera; microphone; autoplay; xr-spatial-tracking; fullscreen; clipboard-read; clipboard-write;"
-                        className="h-full w-full"
-                      />
+                      <AvatarViewer modelUrl={avatarUrl} />
                     </div>
                   </div>
                 )}
