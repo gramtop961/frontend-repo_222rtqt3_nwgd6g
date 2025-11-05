@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Mic, MicOff, Users, DoorOpen, Loader2, Video as VideoIcon, VideoOff } from 'lucide-react';
+import { Mic, MicOff, Users, DoorOpen, Loader2, Video as VideoIcon, VideoOff, User } from 'lucide-react';
 import Spline from '@splinetool/react-spline';
 
 export default function Room({ code }) {
@@ -11,6 +11,8 @@ export default function Room({ code }) {
   const [cameraOn, setCameraOn] = useState(true);
   const [level, setLevel] = useState(0);
   const [xrSupport, setXrSupport] = useState(null);
+  const [showCreator, setShowCreator] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState('');
   const backend = import.meta.env.VITE_BACKEND_URL;
 
   const videoRef = useRef(null);
@@ -18,6 +20,10 @@ export default function Room({ code }) {
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
   const rafRef = useRef(null);
+
+  const viewerRef = useRef(null);
+  const creatorRef = useRef(null);
+  const frameReadyRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -67,7 +73,10 @@ export default function Room({ code }) {
           analyser.getByteFrequencyData(dataArray);
           const slice = dataArray.slice(0, 16);
           const avg = slice.reduce((a, b) => a + b, 0) / slice.length;
-          setLevel(Math.min(1, avg / 160));
+          const lvl = Math.min(1, avg / 160);
+          setLevel(lvl);
+          // Try drive avatar lip-sync if viewer is ready
+          sendBlendShapes(lvl);
           rafRef.current = requestAnimationFrame(tick);
         };
         tick();
@@ -86,7 +95,6 @@ export default function Room({ code }) {
     initMedia();
 
     return () => {
-      stopped = true;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       if (audioContextRef.current) audioContextRef.current.close().catch(() => {});
       if (streamRef.current) {
@@ -95,6 +103,59 @@ export default function Room({ code }) {
       }
     };
   }, []);
+
+  // Ready Player Me postMessage handling
+  useEffect(() => {
+    function handleMessage(event) {
+      const data = event.data;
+      if (!data) return;
+      // Creator frame events
+      if (data.source === 'readyplayerme') {
+        if (data.eventName === 'v1.frame.ready') {
+          // Subscribe to avatar export event
+          creatorRef.current?.contentWindow?.postMessage({
+            target: 'readyplayerme',
+            type: 'subscribe',
+            eventName: 'v1.avatar.exported'
+          }, '*');
+        }
+        if (data.eventName === 'v1.avatar.exported') {
+          const url = data.data?.url;
+          if (url) {
+            setAvatarUrl(url);
+            setShowCreator(false);
+          }
+        }
+      }
+
+      // Viewer frame readiness
+      if (data.target === 'readyplayerme' && data.type === 'frameReady') {
+        frameReadyRef.current = true;
+      }
+    }
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  const sendBlendShapes = (lvl) => {
+    // Map audio level to jaw open
+    if (!viewerRef.current) return;
+    try {
+      const cw = viewerRef.current.contentWindow;
+      if (!cw) return;
+      if (!frameReadyRef.current) return;
+      cw.postMessage({
+        target: 'readyplayerme',
+        type: 'setBlendShapes',
+        blendShapes: [
+          { name: 'JawOpen', value: Math.max(0, Math.min(1, lvl * 1.4)) },
+          { name: 'MouthClose', value: 1 - Math.max(0, Math.min(1, lvl * 1.4)) }
+        ]
+      }, '*');
+    } catch (e) {
+      // no-op
+    }
+  };
 
   const sceneUrl = useMemo(() => {
     return 'https://prod.spline.design/EF7JOSsHLk16Tlw9/scene.splinecode';
@@ -141,6 +202,15 @@ export default function Room({ code }) {
       setXrSupport({ supported: false, details: 'Could not determine WebXR support.' });
     }
   };
+
+  const openCreator = () => {
+    setShowCreator(true);
+    // creator iframe will emit frame.ready then we subscribe
+  };
+
+  const viewerSrc = avatarUrl
+    ? `https://readyplayer.me/avatar?model=${encodeURIComponent(avatarUrl)}&pose=idle&hideControls=true&frameApi=1`
+    : '';
 
   return (
     <section className="relative min-h-[100vh] w-full overflow-hidden bg-[#070a13]">
@@ -236,11 +306,39 @@ export default function Room({ code }) {
                   </div>
                 </div>
               </div>
+
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-indigo-100"><User size={16} /> Avatar</div>
+                  {!avatarUrl ? (
+                    <button onClick={openCreator} className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-indigo-200 transition hover:border-indigo-400/60 hover:text-white">Choose Avatar</button>
+                  ) : (
+                    <button onClick={() => setShowCreator(true)} className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-indigo-200 transition hover:border-indigo-400/60 hover:text-white">Change</button>
+                  )}
+                </div>
+
+                {!avatarUrl ? (
+                  <p className="mt-3 text-xs text-indigo-200/80">Pick a Ready Player Me avatar. Your mic will drive basic lip-sync.</p>
+                ) : (
+                  <div className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-black/30">
+                    <div className="aspect-video w-full">
+                      <iframe
+                        ref={viewerRef}
+                        title="Avatar Viewer"
+                        src={viewerSrc}
+                        allow="camera; microphone; autoplay; xr-spatial-tracking; fullscreen; clipboard-read; clipboard-write;"
+                        className="h-full w-full"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
                 <div className="text-indigo-100">Coming soon</div>
                 <ul className="mt-2 list-disc pl-5 text-sm text-indigo-200/90">
                   <li>Peer-to-peer WebRTC with signaling</li>
-                  <li>Avatar lip-sync (Ready Player Me)</li>
+                  <li>Avatar head/eye rig from webcam</li>
                   <li>WebXR AR/VR mode toggle</li>
                 </ul>
                 <div className="mt-4">
@@ -256,6 +354,26 @@ export default function Room({ code }) {
           </div>
         )}
       </div>
+
+      {showCreator && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 p-4">
+          <div className="relative w-full max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-[#0b0f1a] shadow-2xl">
+            <div className="flex items-center justify-between px-4 py-3 text-white">
+              <div className="text-sm font-medium">Ready Player Me — Create your avatar</div>
+              <button onClick={() => setShowCreator(false)} className="text-xs text-indigo-200 hover:text-white">Close</button>
+            </div>
+            <div className="h-[70vh] w-full">
+              <iframe
+                ref={creatorRef}
+                title="Ready Player Me Creator"
+                src="https://readyplayer.me/avatar?frameApi"
+                allow="camera; microphone; autoplay; clipboard-read; clipboard-write;"
+                className="h-full w-full"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
