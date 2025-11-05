@@ -6,14 +6,48 @@ import Spline from '@splinetool/react-spline';
 export default function Hero() {
   const [showJoin, setShowJoin] = useState(false);
   const [code, setCode] = useState('');
+  const backend = import.meta.env.VITE_BACKEND_URL;
 
-  const handleJoin = (e) => {
+  const goToRoom = (roomCode) => {
+    const target = `/room/${roomCode}`;
+    window.history.pushState({}, '', target);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  };
+
+  const handleCreate = async () => {
+    try {
+      const res = await fetch(`${backend}/rooms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scene: 'classroom' })
+      });
+      if (!res.ok) throw new Error('Failed to create room');
+      const data = await res.json();
+      goToRoom(data.code);
+    } catch (e) {
+      console.error(e);
+      alert('Could not create room. Please try again.');
+    }
+  };
+
+  const handleJoin = async (e) => {
     e.preventDefault();
     if (!code.trim()) return;
-    // In a real app this would navigate to the room; here we just alert for demo
-    alert(`Joining room: ${code}`);
-    setCode('');
-    setShowJoin(false);
+    try {
+      const res = await fetch(`${backend}/rooms/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: code.trim().toUpperCase() })
+      });
+      if (!res.ok) throw new Error('Room not found');
+      const data = await res.json();
+      setCode('');
+      setShowJoin(false);
+      goToRoom(data.code);
+    } catch (e) {
+      console.error(e);
+      alert('Room not found. Check your code and try again.');
+    }
   };
 
   return (
@@ -48,7 +82,7 @@ export default function Hero() {
           </p>
 
           <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
-            <GlowButton onClick={() => alert('Room created! Share the code with your class.')}>
+            <GlowButton onClick={handleCreate}>
               <Video size={16} />
               Create Room
             </GlowButton>
@@ -80,7 +114,7 @@ export default function Hero() {
               <input
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
-                placeholder="e.g. MATH-101"
+                placeholder="e.g. ABC123"
                 className="flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-2 outline-none placeholder:text-indigo-200/60 focus:border-indigo-400"
               />
               <button
